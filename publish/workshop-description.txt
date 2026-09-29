@@ -22,4 +22,6 @@ Works with the base game and all DLCs, on build 744825 (U59) or newer. No depend
 
 Formerly published as "Fridges Only Cool". If you had that version enabled, enable "No Magic Fridges" in the Mods menu after updating: the mod's internal ID changed with the name.
 
+Developed by a professional software developer with assistance from Claude Code.
+
 Source and issue tracker: https://github.com/isochronous/no-magic-fridges
