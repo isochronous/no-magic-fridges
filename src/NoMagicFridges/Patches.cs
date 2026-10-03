@@ -22,7 +22,9 @@ namespace NoMagicFridges
 			{
 				if (stt == null || !Sim.IsValidHandle(stt.SimHandle))
 					return true;
-				if (!(ActiveField.GetValue(__instance) is bool active) || !active)
+				if (ActiveField == null || StorageField == null)
+					return true; // the game renamed its fields: leave vanilla alone rather than throw
+				if (!(ActiveField.GetValue(__instance) is bool active && active))
 					return true; // inactive: vanilla sends zeros, which is what we want
 				Storage storage = StorageField.GetValue(__instance) as Storage;
 				if (storage == null || storage.GetComponent<FridgeThermostat>() == null)

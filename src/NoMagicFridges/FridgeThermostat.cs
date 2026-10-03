@@ -1,6 +1,7 @@
-#pragma warning disable 649, 169 // [MyCmpGet] fields are populated by the game via reflection
+#pragma warning disable 649 // [MyCmpGet] fields are populated by the game via reflection
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 
@@ -26,13 +27,13 @@ namespace NoMagicFridges
 	public sealed class FridgeThermostat : KMonoBehaviour, ISim1000ms
 	{
 		/// <summary>Insulated Tile thermal conductivity relative to its material (InsulationTileConfig).</summary>
-		public const float InsulationFactor = 0.01f;
+		private const float InsulationFactor = 0.01f;
 
 		/// <summary>
 		/// Heat capacity of the compressor's share of the interior, kDTU/K: about 25 kg of food
 		/// (3.47 kDTU/kg/K) in a fridge that holds 100 kg. Larger cools a full warm fridge faster.
 		/// </summary>
-		public const float BaseHeatCapacity = 25f * 3.47f;
+		private const float BaseHeatCapacity = 25f * 3.47f;
 
 		/// <summary>Insulate at or below setpoint + this; release above setpoint + ReleaseBand.</summary>
 		private const float InsulateBand = 0.1f;
@@ -40,6 +41,8 @@ namespace NoMagicFridges
 
 		/// <summary>Temperature changes smaller than this are not worth a sim message.</summary>
 		private const float MinimumStep = 0.0005f;
+		/// <summary>Never drive an item below this (kelvin); the sim treats lower values as broken.</summary>
+		private const float MinimumTemperature = 1f;
 
 		private sealed class Tracked
 		{
@@ -56,8 +59,21 @@ namespace NoMagicFridges
 			public float fraction;
 		}
 
-		private static readonly Action<SimTemperatureTransfer> SimRegister = AccessTools.MethodDelegate<Action<SimTemperatureTransfer>>(AccessTools.Method(typeof(SimTemperatureTransfer), "SimRegister"));
-		private static readonly Action<SimTemperatureTransfer> SimUnregister = AccessTools.MethodDelegate<Action<SimTemperatureTransfer>>(AccessTools.Method(typeof(SimTemperatureTransfer), "SimUnregister"));
+		// SimTemperatureTransfer's register/unregister are protected; a game rename leaves these
+		// null and the thermostat logs once and does nothing instead of throwing.
+		private static readonly Action<SimTemperatureTransfer> SimRegister = SimTransferMethod("SimRegister");
+		private static readonly Action<SimTemperatureTransfer> SimUnregister = SimTransferMethod("SimUnregister");
+
+		private static Action<SimTemperatureTransfer> SimTransferMethod(string name)
+		{
+			MethodInfo method = AccessTools.Method(typeof(SimTemperatureTransfer), name);
+			if (method == null)
+			{
+				Debug.LogWarning("[NoMagicFridges] SimTemperatureTransfer." + name + " not found; fridge contents keep the vanilla behaviour");
+				return null;
+			}
+			return AccessTools.MethodDelegate<Action<SimTemperatureTransfer>>(method);
+		}
 
 		[MyCmpGet] private Storage storage;
 		[MyCmpGet] private Operational operational;
@@ -178,12 +194,14 @@ namespace NoMagicFridges
 			{
 				// Compressor off: this weighting makes the heat the warm items lose exactly the
 				// heat the cold items gain this step.
+				if (coupling <= 0f)
+					return; // nothing in the box exchanges heat (a modded item with no conductivity)
 				interior = coupledEnergy / coupling;
 			}
 			foreach (Sample sample in samples)
 			{
 				float target = sample.temperature + (interior - sample.temperature) * sample.fraction;
-				if (Mathf.Abs(target - sample.temperature) >= MinimumStep && target > 1f)
+				if (Mathf.Abs(target - sample.temperature) >= MinimumStep && target > MinimumTemperature)
 					sample.element.Temperature = target;
 			}
 		}
@@ -213,8 +231,8 @@ namespace NoMagicFridges
 		{
 			if (transfer == null || !transfer.isSpawned)
 				return;
-			SimUnregister(transfer);
-			SimRegister(transfer);
+			SimUnregister?.Invoke(transfer);
+			SimRegister?.Invoke(transfer);
 		}
 
 		/// <summary>An item leaving the fridge must get its normal heat exchange back immediately.</summary>
