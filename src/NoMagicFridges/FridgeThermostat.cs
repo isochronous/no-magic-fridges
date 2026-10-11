@@ -19,8 +19,12 @@ namespace NoMagicFridges
 	///     thermal mass at the setpoint is blended into the interior temperature, pulling it
 	///     down. At or below the setpoint the compressor is off and the contents only equalise
 	///     among themselves, so the fridge itself never heats anything;
-	///   - items at or below the setpoint are insulated from the room the way an Insulated
-	///     Tile is (heat exchange scaled by 0.01, not stopped).
+	///   - an item colder than the room is insulated from it the way an Insulated Tile is
+	///     (heat exchange scaled by 0.01, not stopped): the room can only ever warm it, and
+	///     in a conductive atmosphere it would otherwise out-pull the compressor on a small
+	///     item (1 kg of food in hydrogen at 22 C sat at -13 C in a -19 C Freezer). An item
+	///     warmer than the room keeps exchanging, so a fridge in a cold room still deep-
+	///     freezes its contents, and the thermostat never warms anything.
 	///
 	/// Unpowered fridges, and items that leave the fridge, are pure vanilla.
 	/// </summary>
@@ -35,9 +39,12 @@ namespace NoMagicFridges
 		/// </summary>
 		private const float BaseHeatCapacity = 25f * 3.47f;
 
-		/// <summary>Insulate at or below setpoint + this; release above setpoint + ReleaseBand.</summary>
-		private const float InsulateBand = 0.1f;
-		private const float ReleaseBand = 0.6f;
+		/// <summary>
+		/// Insulate once the room is this much warmer than the item; release once it is this much
+		/// colder. The gap keeps an item near room temperature from flipping every second.
+		/// </summary>
+		private const float InsulateBand = 0.25f;
+		private const float ReleaseBand = 0.25f;
 
 		/// <summary>Temperature changes smaller than this are not worth a sim message.</summary>
 		private const float MinimumStep = 0.0005f;
@@ -136,7 +143,8 @@ namespace NoMagicFridges
 					continue;
 				}
 				float temperature = element.Temperature;
-				bool insulate = tracked.insulated ? temperature <= setpoint + ReleaseBand : temperature <= setpoint + InsulateBand;
+				float room = RoomTemperature(item, temperature);
+				bool insulate = tracked.insulated ? room - temperature > -ReleaseBand : room - temperature > InsulateBand;
 				if (insulate != tracked.insulated)
 				{
 					if (insulate)
@@ -204,6 +212,16 @@ namespace NoMagicFridges
 				if (Mathf.Abs(target - sample.temperature) >= MinimumStep && target > MinimumTemperature)
 					sample.element.Temperature = target;
 			}
+		}
+
+		/// <summary>
+		/// Temperature of the cell the item sits in (the fridge's own cell), the one the sim lets it
+		/// exchange heat with. Off the grid, treat the room as warmer, so the item stays insulated.
+		/// </summary>
+		private static float RoomTemperature(GameObject item, float itemTemperature)
+		{
+			int cell = Grid.PosToCell(item);
+			return Grid.IsValidCell(cell) ? Grid.Temperature[cell] : itemTemperature + 1f;
 		}
 
 		private static void Insulate(SimTemperatureTransfer transfer, Tracked tracked)
