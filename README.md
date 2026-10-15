@@ -1,5 +1,7 @@
 # No Magic Fridges
 
+**This repository is archived.** This project now lives in [isochronous/ONI-Mods](https://github.com/isochronous/ONI-Mods/tree/main/mods/no-magic-fridges), with its full history; work and new releases continue there. The releases published here stay available.
+
 An [Oxygen Not Included](https://www.klei.com/games/oxygen-not-included) mod that makes a powered fridge behave like an insulated box with a thermostat: it **only ever cools**, its contents share heat with each other, and food already colder than the 1 °C target is never warmed up to it.
 
 ## The problem
